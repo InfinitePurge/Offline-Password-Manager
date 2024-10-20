@@ -1,0 +1,16 @@
+/build
+/device_id.json
+/dist
+/face_recognition.key
+/face_recognition_settings.json
+/initial_language.json
+/language_preference.txt
+/master_password.json
+/requirements.txt
+/secure_notes.json
+/theme_preference.json
+/trusted_devices.json
+/user_face_hidden.png
+/wglogo.webp
+/WyvernGuard.spec
+/__pycache__
