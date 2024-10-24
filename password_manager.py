@@ -64,6 +64,7 @@ class PasswordManager:
         self.categories = self.clean_categories()
         self.sidebar_buttons = []
         self.button_vars = {}
+        self.expired_passwords = set()
 
         
         self.face_recognition_auth = FaceRecognitionAuth()
@@ -672,15 +673,24 @@ class PasswordManager:
             if ret:
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 
-                if self.face_recognition_auth.verify_face(frame):
-                    status_label.config(text=self.translate("Face recognized!"))
+                try:
+                    if self.face_recognition_auth.verify_face(frame):
+                        status_label.config(text=self.translate("Face recognized!"))
+                        cap.release()
+                        face_recognition_window.destroy()
+                        self.password_manager_screen()
+                        self.auto_logout.start()
+                        return
+                    else:
+                        status_label.config(text=self.translate("Face not recognized"))
+                except Exception as e:
+                    logging.error(f"Error during face verification: {str(e)}")
+                    status_label.config(text=self.translate("Error during face recognition"))
+                    self.face_recognition_enabled = False
                     cap.release()
                     face_recognition_window.destroy()
-                    self.password_manager_screen()
-                    self.auto_logout.start()
+                    self.master_password_screen()
                     return
-                else:
-                    status_label.config(text=self.translate("Face not recognized"))
 
                 # Draw rectangle around the face
                 face_locations = face_recognition.face_locations(rgb_frame)
@@ -1388,6 +1398,7 @@ class PasswordManager:
             else:
                 existing_passwords = []
 
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             imported_count = 0
             skipped_count = 0
 
@@ -1396,6 +1407,15 @@ class PasswordManager:
                 try:
                     re_encrypted_password = encrypt_data(new_password['current_password'], self.encryption_key).decode()
                     new_password['current_password'] = re_encrypted_password
+                    
+                    # Update the timestamps to current time
+                    new_password['history'] = [{
+                        "password": re_encrypted_password,
+                        "date": current_time,
+                        "site": new_password['site'],
+                        "username": new_password['username']
+                    }]
+                    
                 except Exception as e:
                     self.logger.error(f"Failed to re-encrypt password for {new_password['site']}: {str(e)}")
                     skipped_count += 1
@@ -1425,6 +1445,7 @@ class PasswordManager:
             messagebox.showerror(self.translate("Error"), f"{self.translate('Failed to import passwords from image')}: {str(e)}")
 
         self.view_passwords_content()
+        self.check_expired_passwords() 
 
     def export_passwords_to_csv(self):
         if not os.path.exists("passwords.json"):
@@ -1494,6 +1515,8 @@ class PasswordManager:
                 with open("passwords.json", "r") as json_file:
                     passwords = json.load(json_file)
 
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
             with open(file_path, "r", newline='', encoding='utf-8') as csv_file:
                 csv_reader = csv.DictReader(csv_file)
                 
@@ -1522,15 +1545,14 @@ class PasswordManager:
                         continue
 
                     encrypted_password = encrypt_data(password, self.encryption_key)
-                    date_added = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    
+                
                     new_entry = {
                         "site": site,
                         "username": username,
                         "current_password": encrypted_password.decode(),
                         "history": [{
                             "password": encrypted_password.decode(),
-                            "date": date_added,
+                            "date": current_time,
                             "site": site,
                             "username": username
                         }]
@@ -1555,6 +1577,7 @@ class PasswordManager:
             messagebox.showerror(self.translate("Error"), f"{self.translate('Failed to import passwords')}: {str(e)}")
 
         self.view_passwords_content()
+        self.check_expired_passwords()
 
     def secure_notes_content(self):
         # Clear existing content
@@ -2848,7 +2871,9 @@ class PasswordManager:
         encrypt_file("passwords.json", self.encryption_key)
 
         messagebox.showinfo(self.translate("Info"), self.translate("Password saved"))
+        self.check_expired_passwords()
         self.password_manager_screen()
+        
 
     def update_password_strength(self, event=None):
         password = self.password_entry.get()
@@ -2942,6 +2967,7 @@ class PasswordManager:
         self.tree.pack(fill="both", expand=True)
 
         self.load_passwords()
+        
 
         self.tree.bind("<Button-1>", self.toggle_checkbox)
         self.tree.bind("<ButtonRelease-1>", self.on_tree_click)
@@ -2963,6 +2989,8 @@ class PasswordManager:
 
         button_style = "large.TButton"
         self.style.configure(button_style, font=("Helvetica", 14))
+
+        self.check_expired_passwords()
 
         def edit_selected_password():
             selected_items = self.tree.selection()
@@ -3028,6 +3056,37 @@ class PasswordManager:
         for col in ("Username", "Password", "Date Added", "Date Edited", "Category"):
             self.tree.column(col, width=150, anchor="center", stretch=True)
         self.tree.column("Reveal", width=50, anchor="center", stretch=False)
+
+        self.check_expired_passwords()
+
+    def check_expired_passwords(self):
+        if os.path.exists("passwords.json"):
+            decrypt_file("passwords.json", self.encryption_key)
+            with open("passwords.json", "r") as file:
+                passwords = json.load(file)
+            encrypt_file("passwords.json", self.encryption_key)
+
+            current_time = datetime.now()
+            expired_passwords = []
+
+            for entry in passwords:
+                site = entry["site"]
+                username = entry["username"]
+                date_added = datetime.strptime(entry["history"][0]["date"], "%Y-%m-%d %H:%M:%S")
+                date_edited = datetime.strptime(entry["history"][-1]["date"], "%Y-%m-%d %H:%M:%S") if len(entry["history"]) > 1 else date_added
+
+                
+                if current_time - date_edited > timedelta(days=30):
+                    expired_passwords.append(f"{site} - {username}")
+
+            
+            if expired_passwords:
+                expired_set = set(expired_passwords) - self.expired_passwords
+                if expired_set:
+                    message = self.translate("The following passwords have expired:") + "\n\n"
+                    message += "\n".join(expired_set)
+                    messagebox.showwarning(self.translate("Expired Passwords"), message)
+                    self.expired_passwords.update(expired_set)
 
 
 
@@ -3357,6 +3416,9 @@ class PasswordManager:
                     "category": category
                 })
                 updated = True
+            
+                self.expired_passwords.discard(f"{old_site} - {old_username}")
+                self.expired_passwords.discard(f"{site} - {username}")
 
         if duplicate_found:
             messagebox.showwarning(self.translate("Warning"), 
@@ -3373,6 +3435,7 @@ class PasswordManager:
             messagebox.showwarning(self.translate("Warning"), self.translate("Failed to update the password"))
 
         self.update_content('view_passwords')
+        self.check_expired_passwords()
 
     def update_edit_password_strength(self, event=None):
         password = self.edit_password_entry.get()
