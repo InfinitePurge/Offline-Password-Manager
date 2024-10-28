@@ -169,7 +169,7 @@ class PasswordManager:
             print(f"Error loading logo: {e}")
 
     def load_symbols(self):
-        # Define symbols for each button
+        # Symbols for each button
         self.symbols = {
             'main_menu': '🏠',
             'add_password': '➕',
