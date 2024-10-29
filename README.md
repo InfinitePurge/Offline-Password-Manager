@@ -45,7 +45,7 @@ WyvernGuard is a secure, feature-rich password manager built with Python, offeri
 ### Installation
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/wyvernguard.git
+   git clone https://github.com/Offline-Password-Manager/wyvernguard.git
    ```
 2. Navigate to the project directory:
    ```bash
