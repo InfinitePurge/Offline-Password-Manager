@@ -855,6 +855,11 @@ class PasswordManager:
         if messagebox.askyesno(self.translate("Reset Master Password"), 
                 self.translate("This will delete all stored information including passwords and it will reset the master password. Are you sure?")):
             
+            # Disable face recognition first
+            if hasattr(self, 'face_recognition_auth'):
+                self.face_recognition_auth.disable_face_recognition()
+                self.face_recognition_enabled = False
+
             files_to_remove = [
                 "master_password.json",
                 "passwords.json",
@@ -869,11 +874,30 @@ class PasswordManager:
                 'face_recognition_settings.json'
             ]
 
+            # Add face recognition related files and directories
+            appdata_path = os.path.join(os.getenv('APPDATA'), 'WyvernGuard')
+            if os.path.exists(appdata_path):
+                try:
+                    # Remove all files in the appdata directory
+                    for file in os.listdir(appdata_path):
+                        file_path = os.path.join(appdata_path, file)
+                        if os.path.isfile(file_path):
+                            os.remove(file_path)
+                    # Remove the directory itself
+                    os.rmdir(appdata_path)
+                except Exception as e:
+                    print(f"Error cleaning up appdata directory: {str(e)}")
+
+            # Remove local files
             for file in files_to_remove:
                 if os.path.exists(file):
-                    os.remove(file)
+                    try:
+                        os.remove(file)
+                    except Exception as e:
+                        print(f"Error removing file {file}: {str(e)}")
             
-            messagebox.showinfo(self.translate("Info"), self.translate("All passwords have been deleted and master password has been reset."))
+            messagebox.showinfo(self.translate("Info"), 
+                self.translate("All passwords and face recognition data have been deleted and master password has been reset."))
             
             # Recreates the encryption key
             self.encryption_key = Fernet.generate_key()
@@ -2458,28 +2482,107 @@ class PasswordManager:
 
     def capture_face_image(self):
         try:
-            image_data = self.face_recognition_auth.capture_image_from_webcam()
-            if image_data:
-                if self.face_recognition_auth.enable_face_recognition(image_data):
-                    self.face_recognition_enabled = True
-                    messagebox.showinfo(self.translate("Face Recognition"), self.translate("Face Recognition enabled"))
-                else:
-                    messagebox.showerror(self.translate("Error"), self.translate("Failed to detect a face in the image. Please try again."))
-            else:
-                self.handle_camera_error()
+            # Create a preview window
+            preview_window = tk.Toplevel(self.root)
+            preview_window.title(self.translate("Camera Preview"))
+            preview_window.geometry("640x520")
+            self.center_window(640, 520, window=preview_window)
+
+            # Add instructions
+            ttk.Label(preview_window, 
+                    text=self.translate("Position your face in the center of the frame"),
+                    font=("Helvetica", 12)).pack(pady=10)
+
+            # Create a label for the camera feed
+            camera_label = ttk.Label(preview_window)
+            camera_label.pack(pady=10)
+
+            # Create a progress bar
+            progress_var = tk.DoubleVar()
+            progress_bar = ttk.Progressbar(preview_window, 
+                                        variable=progress_var,
+                                        maximum=100,
+                                        length=300,
+                                        mode='determinate')
+            progress_bar.pack(pady=10)
+
+            # Status label
+            status_label = ttk.Label(preview_window, 
+                                    text=self.translate("Initializing camera..."),
+                                    font=("Helvetica", 10))
+            status_label.pack(pady=5)
+
+            # Cancel button
+            cancel_button = ttk.Button(preview_window, 
+                                    text=self.translate("Cancel"),
+                                    command=preview_window.destroy)
+            cancel_button.pack(pady=10)
+
+            def update_preview():
+                nonlocal preview_window
+                try:
+                    # Update progress
+                    progress_var.set(progress_var.get() + 20)
+                    status_label.config(text=self.translate("Capturing image..."))
+
+                    # Capture and process image
+                    image_data = self.face_recognition_auth.capture_image_from_webcam()
+                    if image_data:
+                        # Show the captured image
+                        image = Image.open(io.BytesIO(image_data))
+                        image.thumbnail((600, 400))
+                        photo = ImageTk.PhotoImage(image)
+                        camera_label.config(image=photo)
+                        camera_label.image = photo
+                        
+                        # Process after a short delay
+                        preview_window.after(1000, lambda: process_captured_image(image_data))
+                    else:
+                        raise Exception("Failed to capture image")
+
+                except Exception as e:
+                    preview_window.destroy()
+                    self.handle_camera_error()
+
+            def process_captured_image(image_data):
+                nonlocal preview_window
+                try:
+                    status_label.config(text=self.translate("Processing image..."))
+                    progress_var.set(100)
+
+                    if self.face_recognition_auth.enable_face_recognition(image_data):
+                        self.face_recognition_enabled = True
+                        self.face_recognition_var.set(True)  # Update checkbox state
+                        preview_window.destroy()
+                        messagebox.showinfo(
+                            self.translate("Face Recognition"),
+                            self.translate("Face Recognition enabled successfully")
+                        )
+                        # Update the display and buttons after successful capture
+                        self.update_face_image_display()
+                    else:
+                        status_label.config(
+                            text=self.translate("No face detected. Please try again."),
+                            foreground="red"
+                        )
+                        progress_var.set(0)
+                        preview_window.after(2000, update_preview)
+                except Exception as e:
+                    preview_window.destroy()
+                    messagebox.showerror(
+                        self.translate("Error"),
+                        self.translate("Failed to process image. Please try again.")
+                    )
+
+            # Start the capture process
+            preview_window.after(1000, update_preview)
+
         except Exception as e:
             print(f"Camera error: {str(e)}")
             self.handle_camera_error()
-        finally:
-            self.update_face_image_display()
-    
-    def handle_camera_error(self):
-        error_message = self.translate("Error: Camera not found or cannot be accessed. Please check your camera connection and try again.")
-        messagebox.showerror(self.translate("Camera Error"), error_message)
-        self.face_recognition_var.set(False)
-        self.face_recognition_enabled = False
 
     def update_face_image_display(self):
+        """Update the face image display and button states."""
         image_data = self.face_recognition_auth.get_original_face_image()
         if image_data and self.face_recognition_enabled:
             try:
@@ -2487,7 +2590,7 @@ class PasswordManager:
                 image.thumbnail((200, 200))
                 photo = ImageTk.PhotoImage(image)
                 self.face_image_label.config(image=photo)
-                self.face_image_label.image = photo
+                self.face_image_label.image = photo  # Keep a reference!
             except Exception as e:
                 print(f"Error displaying face image: {str(e)}")
                 self.face_image_label.config(image='')
@@ -2498,8 +2601,14 @@ class PasswordManager:
         for widget in self.content_frame.winfo_children():
             if isinstance(widget, ttk.Frame):
                 for child in widget.winfo_children():
-                    if isinstance(child, ttk.Button) and child['text'] in [self.translate('Upload Face Image'), self.translate('Capture Face Image')]:
+                    if isinstance(child, ttk.Button) and child['text'] in [
+                        self.translate('Upload Face Image'),
+                        self.translate('Capture Face Image')
+                    ]:
                         child['state'] = 'normal' if self.face_recognition_enabled else 'disabled'
+                        
+        # Force update the display
+        self.content_frame.update_idletasks()
 
     def password_generator_content(self):
         # Clear existing content

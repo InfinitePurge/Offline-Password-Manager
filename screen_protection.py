@@ -20,8 +20,8 @@ class ScreenProtection(FileSystemEventHandler):
         self.running = False
         self.last_processed_time = {}
         self.processing_cooldown = 1.0
+        self.start_time = time.time()
         
-        self.start_protection()
 
     def create_blur_overlay(self):
         """Creates a full-screen blurred overlay."""
@@ -61,6 +61,15 @@ class ScreenProtection(FileSystemEventHandler):
         """Process and blur saved screenshot files."""
         current_time = time.time()
         
+        # Check if the file exists before processing
+        if not os.path.exists(path):
+            print(f"File not found: {path}")
+            return
+        
+        # Check if the file was created or modified after the program started
+        if os.path.getctime(path) < self.start_time and os.path.getmtime(path) < self.start_time:
+            return
+        
         if path in self.last_processed_time:
             if current_time - self.last_processed_time[path] < self.processing_cooldown:
                 return
@@ -93,7 +102,30 @@ class ScreenProtection(FileSystemEventHandler):
         last_content = None
         last_check_time = 0
         check_interval = 0.1
-        
+
+        # Define formats_to_check outside of the try block
+        formats_to_check = [
+            win32clipboard.CF_BITMAP,
+            win32clipboard.CF_DIB,
+            win32clipboard.CF_DIBV5
+        ]
+
+        # Initialize last_content with the current clipboard content
+        try:
+            win32clipboard.OpenClipboard()
+            
+            for format in formats_to_check:
+                if win32clipboard.IsClipboardFormatAvailable(format):
+                    last_content = format
+                    break
+        except Exception as e:
+            print(f"Error accessing clipboard on startup: {e}")
+        finally:
+            try:
+                win32clipboard.CloseClipboard()
+            except:
+                pass
+
         while self.running:
             current_time = time.time()
             
@@ -103,12 +135,6 @@ class ScreenProtection(FileSystemEventHandler):
                 
             try:
                 win32clipboard.OpenClipboard()
-                
-                formats_to_check = [
-                    win32clipboard.CF_BITMAP,
-                    win32clipboard.CF_DIB,
-                    win32clipboard.CF_DIBV5
-                ]
                 
                 current_content = None
                 for format in formats_to_check:
@@ -157,6 +183,8 @@ class ScreenProtection(FileSystemEventHandler):
             (hasattr(key, 'vk') and key.vk == keyboard.Key.print_screen.vk and 
                 keyboard.Key.alt in keyboard._pressed):
                 print("Screenshot key combination detected")
+                # Start protection mechanisms when a screenshot is detected
+                self.start_protection()
                 # Add a small delay to let the system capture the screenshot first
                 time.sleep(0.1)
                 # Then blur both the screen and the clipboard content
