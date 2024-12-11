@@ -98,7 +98,7 @@ def check_password_strength(password):
     if re.search(r'(.)\1{2,}', password):
         suggestions.append("Avoid repeating characters")
     
-    # Common word check (you might want to expand this list)
+    # Common word check
     common_words = ['password', '123456', 'qwerty', 'admin']
     if any(word in password.lower() for word in common_words):
         suggestions.append("Avoid common words or patterns")

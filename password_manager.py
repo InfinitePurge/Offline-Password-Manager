@@ -66,6 +66,7 @@ class PasswordManager:
         self.button_vars = {}
         self.expired_passwords = set()
 
+        self.format_url_var = tk.BooleanVar(value=False)
         
         self.face_recognition_auth = FaceRecognitionAuth()
         self.face_recognition_enabled = self.face_recognition_auth.is_enabled()
@@ -1640,8 +1641,296 @@ class PasswordManager:
         ttk.Button(button_frame, text=self.translate("Import"), command=self.import_note, style="large.TButton", bootstyle=WARNING).pack(side=LEFT, padx=10)
         ttk.Button(button_frame, text=self.translate("Export"), command=self.export_note, style="large.TButton", bootstyle=WARNING).pack(side=LEFT, padx=10)
 
+        ttk.Button(button_frame, text=self.translate("Create One-Time Note"), 
+            command=self.create_one_time_note, 
+            style="large.TButton", 
+            bootstyle=PRIMARY).pack(side=LEFT, padx=10)
+        ttk.Button(button_frame, text=self.translate("Read One-Time Note"), 
+            command=self.read_one_time_note, 
+            style="large.TButton", 
+            bootstyle=PRIMARY).pack(side=LEFT, padx=10)
+
         self.auto_logout.reset()
         self.auto_logout.start()
+
+    def create_one_time_note(self):
+        # Create a new window for the one-time note
+        note_window = tk.Toplevel(self.root)
+        note_window.title(self.translate("Create One-Time Note"))
+        note_window.geometry("900x700")
+        self.center_window(900, 700, window=note_window)
+
+        frame = ttk.Frame(note_window, padding=20)
+        frame.pack(expand=True, fill="both")
+
+        # Title section
+        ttk.Label(frame, text=self.translate("Title:")).pack(pady=5)
+        title_entry = ttk.Entry(frame, width=50)
+        title_entry.pack(pady=5)
+
+        # Content section
+        ttk.Label(frame, text=self.translate("Content:")).pack(pady=5)
+        content_text = scrolledtext.ScrolledText(frame, wrap=tk.WORD, width=60, height=15)
+        content_text.pack(pady=5)
+
+        # Expiration options
+        exp_frame = ttk.Frame(frame)
+        exp_frame.pack(pady=10)
+        ttk.Label(exp_frame, text=self.translate("Expires after:")).pack(side=LEFT, padx=5)
+        exp_var = tk.StringVar(value="24")
+        exp_entry = ttk.Combobox(exp_frame, textvariable=exp_var, 
+                                values=["1", "12", "24", "48", "72"], 
+                                state="readonly", width=5)
+        exp_entry.pack(side=LEFT)
+        ttk.Label(exp_frame, text=self.translate("hours")).pack(side=LEFT, padx=5)
+
+        # Button frame
+        button_frame = ttk.Frame(frame)
+        button_frame.pack(pady=10, fill="x")
+
+        def save_one_time_note():
+            title = title_entry.get()
+            content = content_text.get("1.0", tk.END).strip()
+            expiration_hours = int(exp_var.get())
+            
+            if not title or not content:
+                messagebox.showwarning(self.translate("Warning"), 
+                                    self.translate("Both title and content are required"))
+                return
+
+            try:
+                # Generate multiple encryption keys
+                master_key = Fernet.generate_key()
+                validation_key = Fernet.generate_key()
+                content_key = Fernet.generate_key()
+                
+                # Create encrypted validation checksum
+                f_validation = Fernet(validation_key)
+                checksum = f_validation.encrypt(b"VALID").decode()
+                
+                # Encrypt the content
+                f_content = Fernet(content_key)
+                encrypted_content = f_content.encrypt(content.encode()).decode()
+                
+                # Create note data with additional security
+                note_data = {
+                    "title": title,
+                    "content": encrypted_content,
+                    "created_at": datetime.now().isoformat(),
+                    "expires_at": (datetime.now() + timedelta(hours=expiration_hours)).isoformat(),
+                    "used": False,
+                    "checksum": checksum,
+                    "validation_attempts": 0,
+                    "last_access": datetime.now().isoformat()
+                }
+                
+                # Final encryption layer
+                f_master = Fernet(master_key)
+                encrypted_data = f_master.encrypt(json.dumps(note_data).encode())
+                
+                # Create the final file content with multiple layers
+                file_data = {
+                    "format": "WYVERNGUARD_OTN_V2",
+                    "master_key": master_key.decode(),
+                    "validation_key": validation_key.decode(),
+                    "content_key": content_key.decode(),
+                    "data": encrypted_data.decode(),
+                    "security": {
+                        "max_attempts": 3,
+                        "requires_validation": True,
+                        "tamper_check": hashlib.sha256(encrypted_data).hexdigest()
+                    }
+                }
+
+                # Add random padding and create obfuscated structure
+                padding = base64.b64encode(os.urandom(random.randint(1024, 4096))).decode()
+                obfuscated_data = {
+                    "x" + base64.b64encode(os.urandom(6)).decode(): base64.b64encode(os.urandom(random.randint(64, 256))).decode(),
+                    "y" + base64.b64encode(os.urandom(6)).decode(): padding,
+                    "z" + base64.b64encode(os.urandom(6)).decode(): file_data,
+                    "w" + base64.b64encode(os.urandom(6)).decode(): base64.b64encode(os.urandom(random.randint(64, 256))).decode()
+                }
+
+                file_path = filedialog.asksaveasfilename(
+                    defaultextension=".wgn",
+                    filetypes=[("WyvernGuard Note", "*.wgn")],
+                    title=self.translate("Save One-Time Note"),
+                    initialfile=f"{title}.wgn"
+                )
+                
+                if file_path:
+                    # Write random bytes at the start of the file
+                    with open(file_path, 'wb') as f:
+                        f.write(os.urandom(random.randint(64, 256)))  # Random header
+                        f.write(b'\x00' * random.randint(1, 32))      # Random padding
+                        f.write(json.dumps(obfuscated_data).encode())  # Actual data
+                        f.write(os.urandom(random.randint(64, 256)))  # Random footer
+
+                    messagebox.showinfo(self.translate("Success"), 
+                                    self.translate("One-time note created successfully"))
+                    note_window.destroy()
+                        
+            except Exception as e:
+                messagebox.showerror(self.translate("Error"), 
+                                f"{self.translate('Failed to create one-time note')}: {str(e)}")
+
+        ttk.Button(button_frame, 
+                text=self.translate("Save"), 
+                command=save_one_time_note, 
+                style="large.TButton", 
+                bootstyle=SUCCESS,
+                width=15).pack(side=LEFT, padx=5, expand=True)
+                
+        ttk.Button(button_frame, 
+                text=self.translate("Cancel"), 
+                command=note_window.destroy, 
+                style="large.TButton", 
+                bootstyle=DANGER,
+                width=15).pack(side=LEFT, padx=5, expand=True)
+
+    def read_one_time_note(self):
+        try:
+            file_path = filedialog.askopenfilename(
+                filetypes=[("WyvernGuard Note", "*.wgn")],
+                title=self.translate("Open One-Time Note")
+            )
+            
+            if not file_path:
+                return
+
+            # Read and parse the obfuscated file
+            try:
+                with open(file_path, 'rb') as f:
+                    file_content = f.read()
+                
+                # Try to find the JSON data between the random bytes
+                try:
+                    # Convert to string and find the JSON part
+                    content_str = file_content.decode('utf-8', errors='ignore')
+                    json_start = content_str.find('{"x')
+                    json_end = content_str.rfind('}') + 1
+                    if json_start == -1 or json_end == -1:
+                        raise ValueError("Invalid file format")
+                    
+                    json_content = content_str[json_start:json_end]
+                    obfuscated_data = json.loads(json_content)
+                    
+                    # Find the actual data among the random entries
+                    file_data = None
+                    for key, value in obfuscated_data.items():
+                        if isinstance(value, dict) and "format" in value:
+                            file_data = value
+                            break
+                    
+                    if not file_data:
+                        raise ValueError("Invalid file format")
+                    
+                    # Verify format
+                    if file_data.get("format") not in ["WYVERNGUARD_OTN_V1", "WYVERNGUARD_OTN_V2"]:
+                        raise ValueError(self.translate("Invalid note format"))
+                    
+                    # Decrypt and verify the note
+                    f_master = Fernet(file_data["master_key"].encode())
+                    note_data = json.loads(f_master.decrypt(file_data["data"].encode()).decode())
+                    
+                    # Check attempts
+                    note_data["validation_attempts"] = note_data.get("validation_attempts", 0) + 1
+                    if note_data["validation_attempts"] > file_data["security"].get("max_attempts", 3):
+                        self.corrupt_and_delete_file(file_path)
+                        raise ValueError(self.translate("Too many access attempts. File has been invalidated"))
+                    
+                    # Check if note is expired
+                    expires_at = datetime.fromisoformat(note_data["expires_at"])
+                    if datetime.now() > expires_at:
+                        self.corrupt_and_delete_file(file_path)
+                        raise ValueError(self.translate("This note has expired and has been invalidated"))
+                        
+                    # Check if note has been used
+                    if note_data.get("used", False):
+                        raise ValueError(self.translate("This note has already been read"))
+                        
+                    # Decrypt the actual content
+                    f_content = Fernet(file_data["content_key"].encode())
+                    decrypted_content = f_content.decrypt(note_data["content"].encode()).decode()
+                    
+                    # Show the note content
+                    self.display_one_time_note(note_data["title"], decrypted_content)
+                    
+                    # Mark as used and corrupt/delete the file
+                    self.corrupt_and_delete_file(file_path)
+                        
+                except json.JSONDecodeError:
+                    self.corrupt_and_delete_file(file_path)
+                    raise ValueError("File has been tampered with")
+                    
+            except Exception as e:
+                # Always try to corrupt and delete on any error
+                self.corrupt_and_delete_file(file_path)
+                raise e
+                    
+        except Exception as e:
+            messagebox.showerror(self.translate("Error"), 
+                            f"{self.translate('Failed to read one-time note')}: {str(e)}")
+
+    def corrupt_and_delete_file(self, file_path):
+        """Corrupts and then deletes the file."""
+        try:
+            # Multiple overwrites with random data
+            file_size = os.path.getsize(file_path)
+            for _ in range(3):  # Overwrite multiple times
+                with open(file_path, 'wb') as f:
+                    f.write(os.urandom(file_size))  # Overwrite with random data
+                    f.flush()
+                    os.fsync(f.fileno())  # Ensure write to disk
+            
+            # Delete the file
+            os.remove(file_path)
+        except Exception:
+            # If normal deletion fails, try force delete
+            try:
+                import winreg
+                os.system(f'del /F /Q "{file_path}"')
+            except Exception:
+                pass
+
+    def display_one_time_note(self, title, content):
+        note_window = tk.Toplevel(self.root)
+        note_window.title(self.translate("One-Time Note"))
+        note_window.geometry("600x400")
+        self.center_window(600, 400, window=note_window)
+
+        frame = ttk.Frame(note_window, padding=20)
+        frame.pack(expand=True, fill="both")
+
+        ttk.Label(frame, text=title, font=("Helvetica", 16, "bold")).pack(pady=10)
+
+        text_widget = scrolledtext.ScrolledText(frame, wrap=tk.WORD, width=60, height=15)
+        text_widget.insert(tk.END, content)
+        text_widget.config(state=tk.DISABLED)
+        text_widget.pack(expand=True, fill="both", pady=10)
+
+        warning_label = ttk.Label(frame, 
+                                text=self.translate("Warning: This note will be marked as read and cannot be accessed again."),
+                                foreground="red")
+        warning_label.pack(pady=10)
+
+        ttk.Button(frame, text=self.translate("Close"), 
+                command=note_window.destroy, 
+                style="large.TButton", 
+                bootstyle=DANGER).pack(pady=5)
+    
+    def center_window(self, width, height, window=None):
+        # Get the screen width and height
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+
+        # Calculate position coordinates
+        x = (screen_width/2) - (width/2)
+        y = (screen_height/2) - (height/2)
+
+        # Set the position
+        target_window = window if window else self.root
+        target_window.geometry('%dx%d+%d+%d' % (width, height, x, y))
     
     def import_note(self):
         file_path = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")], title=self.translate("Select a text file to import"))
@@ -3720,12 +4009,12 @@ class PasswordManager:
                     decrypt_data(entry["current_password"].encode(), self.encryption_key) == password):
                     return True
         return False
-
+    
     def clear_screen(self):
         for widget in self.root.winfo_children():
             widget.destroy()
         self.auto_logout.stop() 
-
+    
     def on_closing(self):
         if hasattr(self, 'auto_logout'):
             self.auto_logout.cleanup()
