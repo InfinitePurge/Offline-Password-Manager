@@ -222,19 +222,27 @@ class FaceRecognitionAuth:
         return enabled
 
     def capture_image_from_webcam(self):
+        # Pajungiama numatyta kamera kompiuteryje
         cap = cv2.VideoCapture(0)
+        # Tikrinama, ar kamera sėkmingai atidaryta
         if not cap.isOpened():
             logging.error("Failed to open camera")
             return None
 
         try:
+            # Nuskaitomas vienas kadras iš kameros
+            # ret: Loginis (angl:. boolean) kintamasis (angl:. variable), nurodantis ar kadras sėkmingai nuskaitytas
+            # frame: Vaizdo duomenys
             ret, frame = cap.read()
             if not ret:
                 logging.error("Failed to capture frame")
                 return None
 
+            # Konvertuojamas kadras į RGB formatą
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            # Užkoduojamas vaizdas JPEG formatu
             _, buffer = cv2.imencode('.jpg', rgb_frame)
+            # Konvertuojamas vaizdas į baitų formatą
             image_data = buffer.tobytes()
 
             return image_data
@@ -242,4 +250,5 @@ class FaceRecognitionAuth:
             logging.error(f"Error capturing image: {str(e)}")
             return None
         finally:
+            # Atlaisvinama kameros resursus
             cap.release()

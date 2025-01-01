@@ -5,13 +5,15 @@ from screen_protection import ScreenProtection
 
 
 def on_closing():
+    app.on_closing()
     screen_protection.stop_protection()
-    root.destroy()
+    
 
 if __name__ == "__main__":
     root = tb.Window(themename="darkly")
     screen_protection = ScreenProtection(root)
-    app = PasswordManager(root)
+    # Pass screen_protection to PasswordManager
+    app = PasswordManager(root, screen_protection)
     
     # Start the screen protection mechanisms after initializing the app
     screen_protection.start_protection()

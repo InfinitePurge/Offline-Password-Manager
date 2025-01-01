@@ -21,6 +21,25 @@ class ScreenProtection(FileSystemEventHandler):
         self.last_processed_time = {}
         self.processing_cooldown = 1.0
         self.start_time = time.time()
+        self.last_exported_file = None
+        self.is_windows_11 = self.check_windows_version()
+        self.screenshot_hotkeys = [
+            keyboard.Key.print_screen,
+            keyboard.KeyCode.from_vk(0x2C),  # Windows 11 uses VK_SNAPSHOT (0x2C)
+            keyboard.KeyCode(vk=44)  # Alternative VK code for PrintScreen
+        ]
+
+    def check_windows_version(self):
+        """Check if running on Windows 11"""
+        try:
+            import sys
+            import platform
+            if sys.platform == 'win32':
+                version = platform.win32_ver()[0]
+                return version.startswith('11')
+        except:
+            return False
+        return False
         
 
     def create_blur_overlay(self):
@@ -28,37 +47,45 @@ class ScreenProtection(FileSystemEventHandler):
         if self.overlay_window:
             return
             
-        # Take screenshot and blur it
+        # Screenshot blur
         screenshot = ImageGrab.grab()
         blurred_screen = screenshot.filter(ImageFilter.GaussianBlur(radius=10))
         self.tk_blurred_image = ImageTk.PhotoImage(blurred_screen)
         
-        # Create overlay window
+        # Creates overlay window
         self.overlay_window = tk.Toplevel(self.root)
         self.overlay_window.attributes('-fullscreen', True, '-alpha', 0.5, '-topmost', True)
         self.overlay_window.overrideredirect(True)
         
-        # Create and pack label
+        # Creats and packs label
         label = tk.Label(self.overlay_window, image=self.tk_blurred_image)
         label.image = self.tk_blurred_image
         label.pack()
         
-        # Schedule removal
+        # Schedules removal
         self.root.after(2000, self.remove_blur_overlay)
 
+        # Closes the overlay window if it is open.
     def remove_blur_overlay(self):
-        """Closes the overlay window if it is open."""
         if self.overlay_window:
             self.overlay_window.destroy()
             self.overlay_window = None
             self.tk_blurred_image = None
 
+    # Shows blur overlay using the main thread.
     def show_blur_overlay(self):
-        """Shows blur overlay using the main thread."""
         self.root.after(0, self.create_blur_overlay)
 
+    # Sets the path of the recently exported file to ignore.
+    def set_exported_file(self, filepath):
+        self.last_exported_file = os.path.abspath(filepath)
+
+    # Processes and blurs saved screenshot files.
     def process_image(self, path):
-        """Process and blur saved screenshot files."""
+        # Skips processing if this is the recently exported file
+        if self.last_exported_file and os.path.abspath(path) == self.last_exported_file:
+            return
+            
         current_time = time.time()
         
         # Check if the file exists before processing
@@ -66,7 +93,7 @@ class ScreenProtection(FileSystemEventHandler):
             print(f"File not found: {path}")
             return
         
-        # Check if the file was created or modified after the program started
+        # Checks if the file was created or modified after the program started
         if os.path.getctime(path) < self.start_time and os.path.getmtime(path) < self.start_time:
             return
         
@@ -87,18 +114,35 @@ class ScreenProtection(FileSystemEventHandler):
             except Exception as e:
                 print(f"Error processing {os.path.basename(path)}: {e}")
 
+    def process_clipboard_image(self):
+        """Separate method to handle clipboard image processing"""
+        try:
+            clipboard_image = ImageGrab.grabclipboard()
+            if clipboard_image:
+                blurred = clipboard_image.filter(ImageFilter.GaussianBlur(radius=10))
+                output = io.BytesIO()
+                blurred.convert('RGB').save(output, 'BMP')
+                data = output.getvalue()[14:]
+                output.close()
+                
+                win32clipboard.OpenClipboard()
+                win32clipboard.EmptyClipboard()
+                win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)
+                win32clipboard.CloseClipboard()
+        except Exception as e:
+            print(f"Error processing clipboard image: {e}")
+
+    # Handles new file creation events.
     def on_created(self, event):
-        """Handle new file creation events."""
         if not event.is_directory:
             self.process_image(event.src_path)
             
+    # Handles file modification events.
     def on_modified(self, event):
-        """Handle file modification events."""
         if not event.is_directory:
             self.process_image(event.src_path)
 
     def check_clipboard_for_image(self):
-        """Monitor clipboard for screenshots."""
         last_content = None
         last_check_time = 0
         check_interval = 0.1
@@ -176,39 +220,44 @@ class ScreenProtection(FileSystemEventHandler):
                 
             last_check_time = current_time
 
+    # Apdoroja ekrano kopijos klavišų (angl:. Print Screen) paspaudimą
     def on_key_press(self, key):
-        """Handle screenshot hotkey detection."""
         try:
-            if key == keyboard.Key.print_screen or \
-            (hasattr(key, 'vk') and key.vk == keyboard.Key.print_screen.vk and 
-                keyboard.Key.alt in keyboard._pressed):
-                print("Screenshot key combination detected")
-                # Start protection mechanisms when a screenshot is detected
+            # Enhanced screenshot detection for both Windows 10 and 11
+            is_screenshot_key = (
+                key in self.screenshot_hotkeys or
+                (hasattr(key, 'vk') and key.vk in [k.vk for k in self.screenshot_hotkeys if hasattr(k, 'vk')])
+            )
+            
+            if is_screenshot_key or (
+                hasattr(key, 'vk') and 
+                keyboard.Key.alt in keyboard._pressed
+            ):
+                print(f"Screenshot key detected on {'Windows 11' if self.is_windows_11 else 'Windows 10'}")
                 self.start_protection()
-                # Add a small delay to let the system capture the screenshot first
-                time.sleep(0.1)
-                # Then blur both the screen and the clipboard content
+                
+                # Increased delay for Windows 11
+                time.sleep(0.2 if self.is_windows_11 else 0.1)
                 self.show_blur_overlay()
-                # Get and blur clipboard content
-                try:
-                    clipboard_image = ImageGrab.grabclipboard()
-                    if clipboard_image:
-                        blurred = clipboard_image.filter(ImageFilter.GaussianBlur(radius=10))
-                        output = io.BytesIO()
-                        blurred.convert('RGB').save(output, 'BMP')
-                        data = output.getvalue()[14:]
-                        output.close()
-                        win32clipboard.OpenClipboard()
-                        win32clipboard.EmptyClipboard()
-                        win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)
-                        win32clipboard.CloseClipboard()
-                except Exception as e:
-                    print(f"Error processing PrintScreen clipboard: {e}")
+                
+                # Add multiple attempts for Windows 11
+                if self.is_windows_11:
+                    max_attempts = 3
+                    for _ in range(max_attempts):
+                        try:
+                            self.process_clipboard_image()
+                            break
+                        except Exception as e:
+                            print(f"Attempt to process clipboard failed: {e}")
+                            time.sleep(0.1)
+                else:
+                    self.process_clipboard_image()
+                    
         except AttributeError:
             pass
 
+    # Sets up file system monitoring for screenshot folders.
     def setup_file_monitoring(self):
-        """Setup file system monitoring for screenshot folders."""
         paths_to_monitor = [
             os.path.join(os.path.expanduser('~'), 'Pictures', 'Screenshots'),
             os.path.join(os.path.expanduser('~'), 'Pictures'),
@@ -224,8 +273,8 @@ class ScreenProtection(FileSystemEventHandler):
         
         return observer
 
+    # Starts all screenshot prevention mechanisms.
     def start_protection(self):
-        """Start all screenshot prevention mechanisms."""
         self.running = True
         
         # Start keyboard listener
@@ -245,10 +294,10 @@ class ScreenProtection(FileSystemEventHandler):
         
         print("Screenshot protection active")
 
+    # Stops all screenshot prevention mechanisms.
     def stop_protection(self):
-        """Stop all screenshot prevention mechanisms."""
         self.running = False
-        
+
         if self.listener:
             self.listener.stop()
             

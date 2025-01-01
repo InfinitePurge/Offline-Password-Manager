@@ -15,7 +15,7 @@ from io import BytesIO
 import json
 from tkinter import scrolledtext
 import cryptography
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import webbrowser
 from stegano import lsb
 from PIL import Image
@@ -51,7 +51,7 @@ def get_resource_path(relative_path):
         return os.path.join(base_path, relative_path)
 
 class PasswordManager:
-    def __init__(self, root):
+    def __init__(self, root, screen_protection):
         self.root = root
         self.root.title("WyvernGuard")
         self.root.geometry("1200x700")
@@ -65,6 +65,7 @@ class PasswordManager:
         self.sidebar_buttons = []
         self.button_vars = {}
         self.expired_passwords = set()
+        self.screen_protection = screen_protection
 
         self.format_url_var = tk.BooleanVar(value=False)
         
@@ -170,7 +171,6 @@ class PasswordManager:
             print(f"Error loading logo: {e}")
 
     def load_symbols(self):
-        # Symbols for each button
         self.symbols = {
             'main_menu': '🏠',
             'add_password': '➕',
@@ -1352,10 +1352,14 @@ class PasswordManager:
         
         if not messagebox.askyesno(self.translate("Security Warning"), warning_message, icon='warning'):
             return
+        
+        self.screen_protection.stop_protection()
+        time.sleep(0.5)
 
         input_image_path = filedialog.askopenfilename(filetypes=[("Image files", "*.png *.jpg *.jpeg *.bmp")],
                                                     title=self.translate("Select Image to Hide Data In"))
         if not input_image_path:
+            self.screen_protection.start_protection()
             return
 
         output_image_path = filedialog.asksaveasfilename(
@@ -1365,9 +1369,13 @@ class PasswordManager:
             initialfile="exported_passwords.png"
         )
         if not output_image_path:
+            self.screen_protection.start_protection()
             return
 
         try:
+            # Telling screen protection about the file that's going to be created
+            self.screen_protection.set_exported_file(output_image_path)
+
             decrypt_file("passwords.json", self.encryption_key)
             with open("passwords.json", "r") as json_file:
                 passwords = json.load(json_file)
@@ -1384,11 +1392,15 @@ class PasswordManager:
             secret_img = self.encode_data_in_image(input_image_path, encoded_data)
             
             secret_img.save(output_image_path, 'PNG')
+            time.sleep(0.5)  # Small delay to ensure save is complete
 
             messagebox.showinfo(self.translate("Success"), 
                                 self.translate("Passwords hidden successfully in the image."))
         except Exception as e:
             messagebox.showerror(self.translate("Error"), f"{self.translate('Failed to hide passwords in image')}: {str(e)}")
+        finally:
+            # Restart screen protection after everything is done
+            self.screen_protection.start_protection()
 
     def import_passwords_from_image(self):
         warning_message = self.translate("Warning: This will attempt to extract hidden passwords from an image file. "
@@ -1463,11 +1475,20 @@ class PasswordManager:
                 self.translate("Successfully imported {0} passwords from the image. Skipped {1} entries due to duplicates or encryption issues.").format(imported_count, skipped_count)
             )
             
-            if hasattr(self, 'tree'):
-                self.load_passwords()
+            try:
+                if hasattr(self, 'tree') and self.tree.winfo_exists():
+                    self.load_passwords()
+            except tk.TclError:
+                pass
 
         except Exception as e:
             messagebox.showerror(self.translate("Error"), f"{self.translate('Failed to import passwords from image')}: {str(e)}")
+
+        try:
+            self.view_passwords_content()
+            self.check_expired_passwords()
+        except tk.TclError:
+            pass 
 
         self.view_passwords_content()
         self.check_expired_passwords() 
@@ -1595,14 +1616,24 @@ class PasswordManager:
                 self.translate("Successfully imported {0} passwords. Skipped {1} duplicate entries.").format(imported_count, skipped_count)
             )
             
-            if hasattr(self, 'tree'):
-                self.load_passwords()
+            # Add error handling for Treeview update
+            try:
+                if hasattr(self, 'tree') and self.tree.winfo_exists():
+                    self.load_passwords()
+            except tk.TclError:
+                pass  # Silently ignore Treeview errors
 
         except Exception as e:
             messagebox.showerror(self.translate("Error"), f"{self.translate('Failed to import passwords')}: {str(e)}")
 
-        self.view_passwords_content()
-        self.check_expired_passwords()
+        try:
+            self.view_passwords_content()
+            self.check_expired_passwords()
+        except tk.TclError:
+            pass
+
+            self.view_passwords_content()
+            self.check_expired_passwords()
 
     def secure_notes_content(self):
         # Clear existing content
@@ -1736,16 +1767,20 @@ class PasswordManager:
                 f_content = Fernet(content_key)
                 encrypted_content = f_content.encrypt(content.encode()).decode()
                 
+                # Create timestamps in UTC
+                current_time = datetime.now(timezone.utc)
+                expiration_time = current_time + timedelta(hours=expiration_hours)
+                
                 # Create note data with additional security
                 note_data = {
                     "title": title,
                     "content": encrypted_content,
-                    "created_at": datetime.now().isoformat(),
-                    "expires_at": (datetime.now() + timedelta(hours=expiration_hours)).isoformat(),
+                    "created_at": current_time.isoformat(),
+                    "expires_at": expiration_time.isoformat(),
                     "used": False,
                     "checksum": checksum,
                     "validation_attempts": 0,
-                    "last_access": datetime.now().isoformat()
+                    "last_access": current_time.isoformat()
                 }
                 
                 # Final encryption layer
@@ -1822,76 +1857,71 @@ class PasswordManager:
             if not file_path:
                 return
 
-            # Read and parse the obfuscated file
-            try:
-                with open(file_path, 'rb') as f:
-                    file_content = f.read()
+            with open(file_path, 'rb') as f:
+                file_content = f.read()
+            
+            # Find and parse JSON data more precisely
+            content_str = file_content.decode('utf-8', errors='ignore')
+            json_start = content_str.find('{"x')
+            if json_start == -1:
+                raise ValueError(self.translate("Invalid file format"))
                 
-                # Try to find the JSON data between the random bytes
-                try:
-                    # Convert to string and find the JSON part
-                    content_str = file_content.decode('utf-8', errors='ignore')
-                    json_start = content_str.find('{"x')
-                    json_end = content_str.rfind('}') + 1
-                    if json_start == -1 or json_end == -1:
-                        raise ValueError("Invalid file format")
-                    
-                    json_content = content_str[json_start:json_end]
-                    obfuscated_data = json.loads(json_content)
-                    
-                    # Find the actual data among the random entries
-                    file_data = None
-                    for key, value in obfuscated_data.items():
-                        if isinstance(value, dict) and "format" in value:
-                            file_data = value
-                            break
-                    
-                    if not file_data:
-                        raise ValueError("Invalid file format")
-                    
-                    # Verify format
-                    if file_data.get("format") not in ["WYVERNGUARD_OTN_V1", "WYVERNGUARD_OTN_V2"]:
-                        raise ValueError(self.translate("Invalid note format"))
-                    
-                    # Decrypt and verify the note
-                    f_master = Fernet(file_data["master_key"].encode())
-                    note_data = json.loads(f_master.decrypt(file_data["data"].encode()).decode())
-                    
-                    # Check attempts
-                    note_data["validation_attempts"] = note_data.get("validation_attempts", 0) + 1
-                    if note_data["validation_attempts"] > file_data["security"].get("max_attempts", 3):
-                        self.corrupt_and_delete_file(file_path)
-                        raise ValueError(self.translate("Too many access attempts. File has been invalidated"))
-                    
-                    # Check if note is expired
-                    expires_at = datetime.fromisoformat(note_data["expires_at"])
-                    if datetime.now() > expires_at:
-                        self.corrupt_and_delete_file(file_path)
-                        raise ValueError(self.translate("This note has expired and has been invalidated"))
-                        
-                    # Check if note has been used
-                    if note_data.get("used", False):
-                        raise ValueError(self.translate("This note has already been read"))
-                        
-                    # Decrypt the actual content
-                    f_content = Fernet(file_data["content_key"].encode())
-                    decrypted_content = f_content.decrypt(note_data["content"].encode()).decode()
-                    
-                    # Show the note content
-                    self.display_one_time_note(note_data["title"], decrypted_content)
-                    
-                    # Mark as used and corrupt/delete the file
-                    self.corrupt_and_delete_file(file_path)
-                        
-                except json.JSONDecodeError:
-                    self.corrupt_and_delete_file(file_path)
-                    raise ValueError("File has been tampered with")
-                    
+            # Parse character by character to find the proper JSON ending
+            brace_count = 0
+            json_end = json_start
+            
+            for i in range(json_start, len(content_str)):
+                if content_str[i] == '{':
+                    brace_count += 1
+                elif content_str[i] == '}':
+                    brace_count -= 1
+                    if brace_count == 0:
+                        json_end = i + 1
+                        break
+            
+            json_content = content_str[json_start:json_end]
+            
+            try:
+                obfuscated_data = json.loads(json_content)
+            except json.JSONDecodeError:
+                raise ValueError(self.translate("Invalid file format"))
+            
+            # Rest of the code remains the same
+            file_data = None
+            for value in obfuscated_data.values():
+                if isinstance(value, dict) and "format" in value:
+                    file_data = value
+                    break
+            
+            if not file_data:
+                raise ValueError(self.translate("Invalid file format"))
+            
+            # Decrypt the note
+            f_master = Fernet(file_data["master_key"].encode())
+            note_data = json.loads(f_master.decrypt(file_data["data"].encode()).decode())
+            
+            # Check expiration
+            expires_at = datetime.fromisoformat(note_data["expires_at"])
+            if not expires_at.tzinfo:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            
+            if datetime.now(timezone.utc) > expires_at:
+                os.remove(file_path)
+                raise ValueError(self.translate("This note has expired"))
+            
+            # Decrypt content
+            f_content = Fernet(file_data["content_key"].encode())
+            decrypted_content = f_content.decrypt(note_data["content"].encode()).decode()
+            
+            # Display the note
+            self.display_one_time_note(note_data["title"], decrypted_content)
+            
+            # Delete the file after reading
+            try:
+                os.remove(file_path)
             except Exception as e:
-                # Always try to corrupt and delete on any error
-                self.corrupt_and_delete_file(file_path)
-                raise e
-                    
+                print(f"Warning: Could not delete file: {str(e)}")
+            
         except Exception as e:
             messagebox.showerror(self.translate("Error"), 
                             f"{self.translate('Failed to read one-time note')}: {str(e)}")
@@ -3232,7 +3262,7 @@ class PasswordManager:
         if self.format_url_var.get():
             site = format_url(site)
 
-        # Checks if an identical entry already exists
+        # Duplicate check
         if self.is_duplicate_entry(site, username, password):
             messagebox.showwarning(self.translate("Warning"), 
                                 self.translate("An identical password entry already exists. No changes were made."))
@@ -3444,9 +3474,9 @@ class PasswordManager:
                 date_added = entry["history"][0]["date"]
                 date_edited = entry["history"][-1]["date"] if len(entry["history"]) > 1 else ""
                 category = entry.get("category", "")
-                hidden_password = "*" * 8  # Hide password with asterisks
+                hidden_password = "*" * 8  # Hides password in this symbol *
                 item = self.tree.insert("", "end", values=("☐", site, username, hidden_password, date_added, date_edited, category, "👁"))
-                # Store the actual encrypted password in the tree item
+                # Stores the actual encrypted password in the tree item
                 self.tree.item(item, tags=(encrypted_password,))
 
         self.tree.column("Checkbox", width=30, anchor="center", stretch=False)
@@ -3794,7 +3824,7 @@ class PasswordManager:
         with open("passwords.json", "r") as file:
             passwords = json.load(file)
 
-        # Checks for duplicates and update the entry
+        # Checks for duplicates and updates the entry
         duplicate_found = False
         for entry in passwords:
             if entry["site"] == site and entry["username"] == username:
