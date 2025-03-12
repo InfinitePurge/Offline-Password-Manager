@@ -290,6 +290,21 @@ WyvernGuard's Secure Notes feature allows you to store and manage sensitive text
 - Notes are automatically locked when you navigate away from the Secure Notes screen or when the auto-logout timer expires.
 - The preview pane doesn't allow editing to prevent accidental changes.
 
+#### Creating a One-Time Note
+
+1. Click the "Add One-Time Note" button.
+2. Enter a title for your note.
+3. Type or paste the sensitive content.
+4. Click "Save" to encrypt and store the one-time note.
+5. The note will be marked with a special "One-Time" indicator in the list.
+
+#### Viewing a One-Time Note
+
+1. Select the one-time note from the list.
+2. A warning message will appear informing you that the note will be deleted after viewing.
+3. Click "Confirm" to proceed with viewing.
+4. After viewing, the note will be automatically and permanently deleted.
+
 ### Tips for Using Secure Notes
 
 - Use Secure Notes for sensitive information like recovery codes, software licenses, or personal notes.
@@ -799,6 +814,88 @@ This option extracts passwords hidden within an image file using steganography.
 Remember, while importing can save time when switching password managers or restoring from a backup, it's crucial to handle the process securely to protect your sensitive information.
 
 
+
+
+## Face Recognition Authentication
+
+WyvernGuard offers face recognition as an additional authentication method. This feature provides a convenient and secure way to access your password vault.
+
+### Setting Up Face Recognition
+
+1. Go to "Settings" and select "Face Recognition Settings"
+2. Check the "Enable Face Recognition" box
+3. It will automatically capture your face and save it to the secured files
+
+### Using Face Recognition
+
+When face recognition is enabled:
+1. At login, your webcam will activate
+2. Position your face in the center of the frame
+3. The system will automatically verify your face
+4. If recognized, you'll be granted access to your vault
+
+### Security Considerations
+
+- Face recognition is an additional security layer, not a replacement for your master password
+- Ensure good lighting when using face recognition
+- Your face data is encrypted and stored securely on your device
+
+### Tips for Better Recognition
+
+1. Ensure good lighting when setting up and using face recognition
+2. Look directly at the camera
+3. Keep a neutral expression
+4. Remove glasses during initial setup if you don't always wear them
+5. Consider setting up face recognition in different lighting conditions
+
+## Screen Protection
+
+WyvernGuard includes advanced screen protection features to prevent unauthorized capture of sensitive information.
+
+### Features
+
+1. **Screenshot Prevention**
+   - Automatically detects and blurs screenshots
+   - Works with Print Screen key and snipping tools
+   - Protects clipboard content
+
+2. **Automatic Blur**
+   - Applies blur effect to captured images
+   - Monitors common screenshot folders
+   - Protects against screen recording
+
+### Protected Actions
+
+The screen protection system activates when:
+- Print Screen key is pressed
+- Snipping Tool/Snip & Sketch is used
+- Third-party screenshot tools are activated
+- Screen recording is attempted
+
+### Protected Locations
+
+The system monitors these common screenshot locations:
+- Pictures/Screenshots folder
+- Desktop
+- Downloads folder
+- System clipboard
+
+### How It Works
+
+1. **Active Monitoring**
+   - Continuously monitors for screenshot attempts
+   - Instantly responds to screen capture actions
+   - Protects clipboard content in real-time
+
+2. **Blur Protection**
+   - Automatically applies blur effect to captured content
+   - Creates a secure overlay during capture attempts
+   - Maintains privacy of sensitive information
+
+### Security Notes
+
+- Screen protection is active only when WyvernGuard is running
+- The feature protects against accidental and intentional screen captures
 
 
 ## Conclusion

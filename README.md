@@ -42,23 +42,78 @@ WyvernGuard is a secure, feature-rich password manager built with Python, offeri
 - Python 3.12
 
 
-### Installation
+# Installation Guide
+
+## Required Software
+
+### Visual Studio Code
+1. Download from the official website - https://code.visualstudio.com/Download
+2. Install using default parameters
+
+### Python 3.12
+1. Download from https://www.python.org/downloads/release/python-3120/
+2. During installation, make sure to check "Add Python to PATH"
+3. Complete the installation
+
+### Python Extension for VS Code
+1. Open VS Code
+2. Go to Extensions section
+3. Find and install the "Python" extension
+
+### CMake
+1. Download Windows x64 Installer from https://cmake.org/download/
+2. During installation, ensure "Add CMake to the system PATH" is checked
+3. Complete the installation
+
+### Visual Studio Build Tools
+1. Download Visual Studio Build Tools from https://visualstudio.microsoft.com/visual-cpp-build-tools/
+2. During installation, select "Desktop development with C++"
+3. Wait for all components to be installed
+
+### Git
+1. Download 64-bit Git for Windows Setup from https://git-scm.com/downloads/win
+2. During installation, keep default parameters
+3. Complete the installation
+
+## Application Installation
+
 1. Clone the repository:
    ```bash
-   https://github.com/InfinitePurge/Offline-Password-Manager.git
+   git clone https://github.com/InfinitePurge/Offline-Password-Manager.git
    ```
+
 2. Navigate to the project directory:
    ```bash
    cd wyvernguard
    ```
-3. Install the required packages:
+
+3. Open terminal in VS Code and install face_recognition_models:
+   ```bash
+   pip install git+https://github.com/ageitgey/face_recognition_models
+   ```
+
+4. Install required packages:
    ```bash
    pip install -r requirements.txt
    ```
-4. Run the application:
+
+5. Run the application:
    ```bash
-   python password_manager.py
+   python WyvernGuard.py
    ```
+
+## Important Notes
+- It's recommended to restart VS Code after each component installation
+- Make sure all packages are installed successfully
+- Run the program through VS Code using the Python extension
+- If you encounter any issues during installation, verify that all prerequisites are properly installed
+- The application requires a camera for face recognition features (if you plan to use this functionality)
+
+## System Requirements
+- Windows 10 or later
+- At least 4GB RAM
+- Webcam (for face recognition features)
+- Internet connection (for initial setup and package installation)
 
 ## 📖 Usage
 

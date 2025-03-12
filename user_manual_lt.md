@@ -288,6 +288,21 @@ Prisiminkite, kad svarbu reguliariai atnaujinti ir stiprinti savo slaptažodžiu
 2. Spustelėkite mygtuką „Eksportuoti“.
 3. Pasirinkite vietą ir pavadinimą eksportuojamam teksto failui.
 
+#### Vienkartinio Užrašo Kūrimas
+
+1. Spustelėkite mygtuką "Pridėti Vienkartinį Užrašą".
+2. Įveskite užrašo pavadinimą.
+3. Įrašykite arba įklijuokite slaptą turinį.
+4. Spustelėkite "Išsaugoti", kad užšifruotumėte ir išsaugotumėte vienkartinį užrašą.
+5. Užrašas bus pažymėtas specialiu "Vienkartinis" ženklu sąraše.
+
+#### Vienkartinio Užrašo Peržiūra
+
+1. Pasirinkite vienkartinį užrašą iš sąrašo.
+2. Pasirodys įspėjimo pranešimas, informuojantis, kad užrašas bus ištrintas po peržiūros.
+3. Spustelėkite "Patvirtinti", kad tęstumėte peržiūrą.
+4. Po peržiūros užrašas bus automatiškai ir negrįžtamai ištrintas.
+
 ### Saugumo funkcijos
 
 - Visas užrašų turinys yra užšifruojamas naudojant jūsų pagrindinį šifravimo raktą.
@@ -799,9 +814,86 @@ Atminkite, kad slaptažodžių saugumas yra labai svarbus. Nors eksportavimas ga
 
 Atminkite, kad nors importavimas gali sutaupyti laiko keičiant slaptažodžių tvarkytuvę ar atkuriant atsargines kopijas, svarbu šį procesą atlikti saugiai, kad apsaugotumėte savo jautrią informaciją.
 
+## Veido Atpažinimo Autentifikacija
 
+WyvernGuard siūlo veido atpažinimą kaip papildomą autentifikavimo metodą. Ši funkcija suteikia patogų ir saugų būdą prisijungti prie jūsų slaptažodžių saugyklos.
 
+### Veido Atpažinimo Nustatymas
 
+1. Eikite į "Nustatymai" ir pasirinkite "Veido Atpažinimo Nustatymai"
+2. Pažymėkite "Įjungti Veido Atpažinimą" langelį
+3. Sistema automatiškai nufotografuos jūsų veidą ir išsaugos jį saugiuose failuose
+
+### Veido Atpažinimo Naudojimas
+
+Kai veido atpažinimas įjungtas:
+1. Prisijungimo metu įsijungs jūsų kamera
+2. Nukreipkite savo veidą į kameros centro rėmelį
+3. Sistema automatiškai patikrins jūsų veidą
+4. Jei atpažins, jums bus suteikta prieiga prie saugyklos
+
+### Saugumo Aspektai
+
+- Veido atpažinimas yra papildomas saugumo sluoksnis, ne pagrindinio slaptažodžio pakaitalas
+- Užtikrinkite gerą apšvietimą naudojant veido atpažinimą
+- Jūsų veido duomenys yra užšifruoti ir saugiai laikomi jūsų įrenginyje
+
+### Patarimai Geresniam Atpažinimui
+
+1. Užtikrinkite gerą apšvietimą nustatant ir naudojant veido atpažinimą
+2. Žiūrėkite tiesiai į kamerą
+3. Išlaikykite neutralią veido išraišką
+4. Nuėmkite akinius pradinio nustatymo metu, jei ne visada juos nešiojate
+5. Apsvarstykite galimybę nustatyti veido atpažinimą skirtingomis apšvietimo sąlygomis
+
+## Ekrano Apsauga
+
+WyvernGuard turi pažangias ekrano apsaugos funkcijas, skirtas apsaugoti nuo neleistino jautrios informacijos fiksavimo.
+
+### Funkcijos
+
+1. **Ekrano Kopijų Prevencija**
+   - Automatiškai aptinka ir sulieja ekrano kopijas
+   - Veikia su Print Screen mygtuku ir iškirpimo įrankiais
+   - Apsaugo iškarpinės turinį
+
+2. **Automatinis Suliejimas**
+   - Pritaiko suliejimo efektą užfiksuotiems vaizdams
+   - Stebi įprastus ekrano kopijų aplankus
+   - Apsaugo nuo ekrano įrašymo
+
+### Apsaugotos Operacijos
+
+Ekrano apsaugos sistema aktyvuojasi kai:
+- Paspaudžiamas Print Screen mygtukas
+- Naudojamas Snipping Tool/Snip & Sketch
+- Aktyvuojami trečiųjų šalių ekrano kopijų įrankiai
+- Bandoma įrašyti ekraną
+
+### Apsaugotos Vietos
+
+Sistema stebi šias įprastas ekrano kopijų vietas:
+- Paveikslėlių/Ekrano kopijų aplanką
+- Darbalaukį
+- Atsisiuntimų aplanką
+- Sistemos iškarpinę
+
+### Kaip Tai Veikia
+
+1. **Aktyvus Stebėjimas**
+   - Nuolat stebi ekrano kopijų bandymus
+   - Akimirksniu reaguoja į ekrano fiksavimo veiksmus
+   - Apsaugo iškarpinės turinį realiu laiku
+
+2. **Suliejimo Apsauga**
+   - Automatiškai pritaiko suliejimo efektą užfiksuotam turiniui
+   - Sukuria saugų perdangos sluoksnį fiksavimo bandymų metu
+   - Išlaiko jautrios informacijos privatumą
+
+### Saugumo Pastabos
+
+- Ekrano apsauga aktyvi tik kai WyvernGuard veikia
+- Funkcija apsaugo nuo atsitiktinio ir tyčinio ekrano fiksavimo
 
 ## Išvada
 
