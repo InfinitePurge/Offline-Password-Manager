@@ -1,0 +1,15 @@
+cryptography
+pillow
+ttkbootstrap
+opencv-python
+pyperclip
+stegano
+markdown
+pyotp
+qrcode
+setuptools
+face_recognition_models
+face_recognition
+pywin32
+pynput
+watchdog
